@@ -15,12 +15,9 @@ Resources:
       CodeUri: src/
       Handler: app.lambda_handler
       Runtime: ruby2.5
-      FunctionName: !Ref LambdaFunctionName
+      FunctionName: UltimateLambda
       Timeout: 300
       Role: !GetAtt UltimateLambdaRole.Arn
-      Environment:
-        Variables:
-          'FUNCTION_NAME': !Ref LambdaFunctionName
 
   UltimateLambdaRole:
     Type: AWS::IAM::Role
@@ -49,7 +46,7 @@ Resources:
                 Resource: '*'
               - Effect: 'Allow'
                 Action:
-                  - 'cloudformation:DescribeStackResources'
+                  - 'lambda:ListTags'
                   - 'cloudformation:DeleteStack'
                 Resource: '*'
               - Effect: 'Allow'
@@ -71,6 +68,11 @@ Resources:
       Targets:
         - Arn: !GetAtt UltimateLambda.Arn
           Id: ultimate_lambda
+          Input: !Join
+            - ''
+            - - "{\"lambda_arn\": \""
+              - !GetAtt UltimateLambda.Arn
+              - "\"}"
 
   UltimateLambdaEventPermission:
     Type: AWS::Lambda::Permission
