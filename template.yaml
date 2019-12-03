@@ -47,6 +47,7 @@ Resources:
               - Effect: 'Allow'
                 Action:
                   - 'lambda:ListTags'
+                  - 'cloudformation:DescribeStacks'
                   - 'cloudformation:DeleteStack'
                 Resource: '*'
               - Effect: 'Allow'

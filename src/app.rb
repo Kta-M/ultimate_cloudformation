@@ -10,5 +10,8 @@ def lambda_handler(event:, context:)
 
   # スタックを削除
   cfn_client = Aws::CloudFormation::Client.new
-  cfn_client.delete_stack(stack_name: stack_name)
+  resp = cfn_client.describe_stacks(stack_name: stack_name)
+  if resp.stacks.first.stack_status == "CREATE_COMPLETE"
+    cfn_client.delete_stack(stack_name: stack_name)
+  end
 end
