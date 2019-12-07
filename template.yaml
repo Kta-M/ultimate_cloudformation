@@ -18,6 +18,9 @@ Resources:
       FunctionName: UltimateLambda
       Timeout: 300
       Role: !GetAtt UltimateLambdaRole.Arn
+      Environment:
+        Variables:
+          STACK_NAME: !Ref AWS::StackName
 
   UltimateLambdaRole:
     Type: AWS::IAM::Role
@@ -46,7 +49,6 @@ Resources:
                 Resource: '*'
               - Effect: 'Allow'
                 Action:
-                  - 'lambda:ListTags'
                   - 'cloudformation:DescribeStacks'
                   - 'cloudformation:DeleteStack'
                 Resource: '*'
