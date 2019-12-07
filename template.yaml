@@ -9,78 +9,18 @@ Parameters:
     Default: UltimateLambda
 
 Resources:
-  UltimateLambda:
-    Type: AWS::Serverless::Function
+  StackEventSns:
+    Type: AWS::SNS::Topic
     Properties:
-      CodeUri: src/
-      Handler: app.lambda_handler
-      Runtime: ruby2.5
-      FunctionName: UltimateLambda
-      Timeout: 300
-      Role: !GetAtt UltimateLambdaRole.Arn
-      Environment:
-        Variables:
-          STACK_NAME: !Ref AWS::StackName
+      DisplayName: StackEventSns
+      TopicName: StackEventSns
 
-  UltimateLambdaRole:
-    Type: AWS::IAM::Role
+  ChildStack:
+    Type: AWS::CloudFormation::Stack
     Properties:
-      RoleName: UltimateLambdaRole
-      MaxSessionDuration: 3600
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: 'Allow'
-            Principal:
-              Service:
-                - 'lambda.amazonaws.com'
-            Action:
-              - 'sts:AssumeRole'
-      Policies:
-        - PolicyName: UltimateLambdaPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: 'Allow'
-                Action:
-                  - 'logs:CreateLogGroup'
-                  - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'
-                Resource: '*'
-              - Effect: 'Allow'
-                Action:
-                  - 'cloudformation:DescribeStacks'
-                  - 'cloudformation:DeleteStack'
-                Resource: '*'
-              - Effect: 'Allow'
-                Action:
-                  - 'lambda:RemovePermission'
-                  - 'lambda:DeleteFunction'
-                  - 'events:RemoveTargets'
-                  - 'events:DeleteRule'
-                  - 'iam:DeleteRolePolicy'
-                  - 'iam:DeleteRole'
-                Resource: '*'
-
-  UltimateLambdaEvent:
-    Type: AWS::Events::Rule
-    Properties:
-      Name: ultimate_lambda_event
-      ScheduleExpression: 'rate(1 minute)'
-      State: ENABLED
-      Targets:
-        - Arn: !GetAtt UltimateLambda.Arn
-          Id: ultimate_lambda
-          Input: !Join
-            - ''
-            - - "{\"lambda_arn\": \""
-              - !GetAtt UltimateLambda.Arn
-              - "\"}"
-
-  UltimateLambdaEventPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: 'lambda:InvokeFunction'
-      FunctionName: !GetAtt UltimateLambda.Arn
-      Principal: 'events.amazonaws.com'
-      SourceArn: !GetAtt UltimateLambdaEvent.Arn
+      TemplateURL: template_child.yaml
+      Parameters:
+        StackEventSnsArn: !Ref StackEventSns
+        StackName: !Ref AWS::StackName
+      NotificationARNs:
+        - !Ref StackEventSns

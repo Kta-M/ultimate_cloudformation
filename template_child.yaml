@@ -1,0 +1,86 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Ultimate CloudFormation
+
+Parameters:
+  LambdaFunctionName:
+    Type: String
+    Default: UltimateLambda
+
+  StackEventSnsArn:
+    Type: String
+
+  StackName:
+    Type: String
+
+Resources:
+  UltimateLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: app.lambda_handler
+      Runtime: ruby2.5
+      FunctionName: UltimateLambda
+      Timeout: 300
+      Role: !GetAtt UltimateLambdaRole.Arn
+      Environment:
+        Variables:
+          PARENT_STACK_NAME: !Ref StackName
+          CHILD_STACK_NAME: !Ref AWS::StackName
+
+  UltimateLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: UltimateLambdaRole
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service:
+                - 'lambda.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: UltimateLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+              - Effect: 'Allow'
+                Action:
+                  - 'cloudformation:DescribeStacks'
+                  - 'cloudformation:DeleteStack'
+                Resource: '*'
+              - Effect: 'Allow'
+                Action:
+                  - 'lambda:RemovePermission'
+                  - 'lambda:DeleteFunction'
+                  - 'iam:DeleteRolePolicy'
+                  - 'iam:DeleteRole'
+                  - 'sns:Unsubscribe'
+                  - 'sns:DeleteTopic'
+                  - 'sns:GetTopicAttributes'
+                Resource: '*'
+
+  UltimateLambdaPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !GetAtt UltimateLambda.Arn
+      Principal: 'sns.amazonaws.com'
+      SourceArn: !Ref StackEventSnsArn
+
+  StackEventSnsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: !GetAtt UltimateLambda.Arn
+      Protocol: lambda
+      TopicArn: !Ref StackEventSnsArn
