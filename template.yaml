@@ -1,26 +1,140 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: >
-  Ultimate CloudFormation
-
-Parameters:
-  LambdaFunctionName:
-    Type: String
-    Default: UltimateLambda
+Description: Ultimate CloudFormation
 
 Resources:
+  UltimateLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: app.lambda_handler
+      Runtime: ruby2.5
+      FunctionName: UltimateLambda
+      Timeout: 300
+      Role: !GetAtt UltimateLambdaRole.Arn
+      Environment:
+        Variables:
+          STACK_NAME: !Ref AWS::StackName
+
+  UltimateLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: UltimateLambdaRole
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service:
+                - 'lambda.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: UltimateLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+              - Effect: 'Allow'
+                Action:
+                  - 'cloudformation:UpdateStack'
+                  - 'cloudformation:DescribeStacks'
+                  - 'cloudformation:DeleteStack'
+                Resource: '*'
+              - Effect: 'Allow'
+                Action:
+                  - 'lambda:RemovePermission'
+                  - 'lambda:DeleteFunction'
+                  - 'iam:DeleteRolePolicy'
+                  - 'iam:DeleteRole'
+                  - 'sns:Unsubscribe'
+                  - 'sns:DeleteTopic'
+                  - 'sns:GetTopicAttributes'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  UltimateLambdaPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !GetAtt UltimateLambda.Arn
+      Principal: 'sns.amazonaws.com'
+      SourceArn: !Ref StackEventSns
+
+  NotificationAttachToStackLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          import cfnresponse
+          import boto3
+          def handler(event, context):
+              try:
+                  if event['RequestType'] == 'Create':
+                      stack_name = event['ResourceProperties']['StackName']
+                      topic_arn = event['ResourceProperties']['TopicArn']
+                      client = boto3.client('cloudformation')
+                      client.update_stack(StackName=stack_name, UsePreviousTemplate=True, NotificationARNs=[topic_arn])
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'error': e.args})
+
+      Handler: index.handler
+      Role: !GetAtt NotificationAttachToStackLambdaRole.Arn
+      Runtime: python3.7
+
+  NotificationAttachToStackLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: NotificationAttachToStackLambdaRole
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service:
+                - 'lambda.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: NotificationAttachToStackLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+              - Effect: 'Allow'
+                Action:
+                  - 'cloudformation:UpdateStack'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  CustomResourceNotificationAttachToStack:
+    Type: Custom::NotificationAttachToStackLambda
+    Version: 1.0
+    Properties:
+      ServiceToken: !GetAtt NotificationAttachToStackLambda.Arn
+      StackName: !Ref AWS::StackName
+      TopicArn: !Ref StackEventSns
+
   StackEventSns:
     Type: AWS::SNS::Topic
     Properties:
       DisplayName: StackEventSns
       TopicName: StackEventSns
-
-  ChildStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      TemplateURL: template_child.yaml
-      Parameters:
-        StackEventSnsArn: !Ref StackEventSns
-        StackName: !Ref AWS::StackName
-      NotificationARNs:
-        - !Ref StackEventSns
+      Subscription:
+        - Endpoint: !GetAtt UltimateLambda.Arn
+          Protocol: lambda
